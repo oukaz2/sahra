@@ -44,6 +44,7 @@ async function buildAll() {
   ];
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
 
+  // Main server bundle (for self-hosted / local production)
   await esbuild({
     entryPoints: ["server/index.ts"],
     platform: "node",
@@ -57,6 +58,10 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  // Vercel serverless entry — NOT bundled, Vercel handles deps via @vercel/node
+  // Just copy api/index.ts to dist so vercel.json can reference it cleanly
+  console.log("done — vercel entry: api/index.ts");
 }
 
 buildAll().catch((err) => {

@@ -71,6 +71,14 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.status(201).json(period);
   });
 
+  // Update EEHC bill for reconciliation
+  app.patch("/api/billing-periods/:id/eehc", (req, res) => {
+    const { eehcBillEgp } = req.body;
+    const updated = storage.updateBillingPeriod(Number(req.params.id), { eehcBillEgp: Number(eehcBillEgp) });
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  });
+
   // Settlement Engine
   app.post("/api/billing-periods/:id/settle", (req, res) => {
     const periodId = Number(req.params.id);
@@ -97,10 +105,22 @@ export function registerRoutes(httpServer: Server, app: Express) {
     let invoiceCounter = existingInvoices.length + 1;
 
     const created = readings.map((r: any) => {
+      // Tier-jump fix: reduce kWh by solar share BEFORE tiered calc.
+      // This correctly moves tenants into lower tiers when solar covers part
+      // of their consumption — the most accurate representation of true savings.
       const solarShare = Math.round(r.consumptionKwh * solarPct * 100) / 100;
-      const gridCharge = calcTieredCost(r.consumptionKwh);
-      const solarCredit = Math.round(gridCharge * (solarShare / r.consumptionKwh) * discountPct * 100) / 100;
-      const totalDue = Math.round((gridCharge - solarCredit) * 100) / 100;
+      const netKwh = Math.max(r.consumptionKwh - solarShare, 0);
+
+      const grossGridCharge = calcTieredCost(r.consumptionKwh); // what they'd pay without solar
+      const netGridCharge = calcTieredCost(netKwh);             // what they pay with solar
+
+      // Solar credit = gross cost minus net cost, then apply the landlord's discount %
+      // (the discount % represents the landlord's margin on solar — they don't pass 100% through)
+      const rawCredit = Math.round((grossGridCharge - netGridCharge) * 100) / 100;
+      const solarCredit = Math.round(rawCredit * discountPct * 100) / 100;
+
+      const gridCharge = grossGridCharge; // shown on invoice as "what grid would cost"
+      const totalDue = Math.round((netGridCharge + (rawCredit - solarCredit)) * 100) / 100;
 
       const reading = storage.createMeterReading({
         billingPeriodId: periodId,

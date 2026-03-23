@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useRef } from "react";
 import Papa from "papaparse";
 import type { BillingPeriod as BP, Invoice, Tenant } from "@shared/schema";
-import { Upload, FileText, Leaf, AlertTriangle, CheckCircle2, ArrowRight, Zap, Download } from "lucide-react";
+import { Upload, FileText, Leaf, AlertTriangle, CheckCircle2, ArrowRight, Zap, Download, Building, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 type EnrichedInvoice = Invoice & { tenant?: Tenant };
 
@@ -29,6 +29,8 @@ export default function BillingPeriod() {
   const [dragOver, setDragOver] = useState(false);
   const [csvRows, setCsvRows] = useState<Array<{ tenantId: number; meterCode: string; name: string; consumptionKwh: number }>>([]);
   const [solarKwh, setSolarKwh] = useState("");
+  const [eehcBill, setEehcBill] = useState("");
+  const [eehcSaved, setEehcSaved] = useState(false);
 
   const { data: period, isLoading: periodLoading } = useQuery<BP>({
     queryKey: ["/api/billing-periods", id],
@@ -58,6 +60,17 @@ export default function BillingPeriod() {
       setSolarKwh("");
     },
     onError: () => toast({ title: "Settlement failed", variant: "destructive" }),
+  });
+
+  const eehcMutation = useMutation({
+    mutationFn: (amount: number) =>
+      apiRequest("PATCH", `/api/billing-periods/${id}/eehc`, { eehcBillEgp: amount }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/billing-periods", id] });
+      setEehcSaved(true);
+      setTimeout(() => setEehcSaved(false), 2000);
+      toast({ title: "EEHC bill saved", description: "Reconciliation updated." });
+    },
   });
 
   const statusMutation = useMutation({
@@ -340,6 +353,124 @@ export default function BillingPeriod() {
           </Card>
         </div>
       )}
+      {/* EEHC Reconciliation — shown after invoices exist */}
+      {invoices && invoices.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Building size={15} /> EEHC Reconciliation
+            <span className="text-xs font-normal text-muted-foreground ml-1">Enter your government electricity bill to see your net position</span>
+          </h2>
+          <Card>
+            <CardContent className="pt-4 pb-4 space-y-4">
+              {/* EEHC bill input */}
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <Label className="text-xs text-muted-foreground mb-1.5 block">EEHC Master Meter Bill (EGP)</Label>
+                  <Input
+                    type="number"
+                    placeholder={period?.eehcBillEgp ? String(period.eehcBillEgp) : "e.g. 85000"}
+                    value={eehcBill}
+                    onChange={e => setEehcBill(e.target.value)}
+                    data-testid="input-eehc-bill"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!eehcBill || eehcMutation.isPending}
+                  onClick={() => eehcMutation.mutate(Number(eehcBill))}
+                  data-testid="button-save-eehc"
+                >
+                  {eehcSaved ? <CheckCircle2 size={13} className="text-green-500" /> : "Save"}
+                </Button>
+              </div>
+
+              {/* Reconciliation breakdown */}
+              {period?.eehcBillEgp != null && (
+                <ReconciliationView
+                  eehcBill={period.eehcBillEgp}
+                  totalCollected={totalCollected}
+                  totalSolarCredit={totalSolarCredit}
+                  totalBilled={totalDue}
+                />
+              )}
+
+              {/* Loss Allocation — coming soon */}
+              <div className="flex items-center gap-2 pt-1 border-t" style={{ borderColor: "hsl(var(--border))" }}>
+                <span className="text-xs text-muted-foreground">Loss Allocation (hallway / common area losses)</span>
+                <span className="text-xs px-1.5 py-0.5 rounded font-medium"
+                  style={{ background: "hsl(38 88% 52% / 0.12)", color: "hsl(38 88% 45%)" }}>
+                  Coming soon
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReconciliationView({ eehcBill, totalCollected, totalSolarCredit, totalBilled }: {
+  eehcBill: number;
+  totalCollected: number;
+  totalSolarCredit: number;
+  totalBilled: number;
+}) {
+  // Net = what you collected from tenants - what EEHC billed you
+  // Solar value = the credit you passed through to tenants (your solar plant's contribution)
+  const netPosition = totalCollected - eehcBill;
+  const isProfit = netPosition >= 0;
+
+  return (
+    <div className="rounded-lg overflow-hidden" style={{ border: "1px solid hsl(var(--border))" }}>
+      <div className="grid grid-cols-3 divide-x" style={{ borderColor: "hsl(var(--border))" }}>
+        <ReconCell
+          label="Collected from Tenants"
+          value={`${new Intl.NumberFormat("en-EG", { maximumFractionDigits: 0 }).format(totalCollected)} EGP`}
+          icon={<TrendingUp size={13} />}
+          color="green"
+        />
+        <ReconCell
+          label="EEHC Government Bill"
+          value={`${new Intl.NumberFormat("en-EG", { maximumFractionDigits: 0 }).format(eehcBill)} EGP`}
+          icon={<TrendingDown size={13} />}
+          color="red"
+        />
+        <ReconCell
+          label={isProfit ? "Net Surplus" : "Net Shortfall"}
+          value={`${isProfit ? "+" : ""}${new Intl.NumberFormat("en-EG", { maximumFractionDigits: 0 }).format(netPosition)} EGP`}
+          icon={<Minus size={13} />}
+          color={isProfit ? "green" : "red"}
+          highlight
+        />
+      </div>
+      <div className="px-4 py-2.5 flex items-center gap-2"
+        style={{ background: "hsl(38 88% 52% / 0.06)", borderTop: "1px solid hsl(var(--border))" }}>
+        <Leaf size={12} className="text-amber-500" />
+        <span className="text-xs text-muted-foreground">
+          Solar plant offset <span className="font-semibold text-amber-600 dark:text-amber-400">
+            {new Intl.NumberFormat("en-EG", { maximumFractionDigits: 0 }).format(totalSolarCredit)} EGP
+          </span> in tenant grid costs this period
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ReconCell({ label, value, icon, color, highlight }: {
+  label: string; value: string; icon: React.ReactNode;
+  color: "green" | "red" | "amber"; highlight?: boolean;
+}) {
+  const colorMap = {
+    green: "text-green-600 dark:text-green-400",
+    red: "text-red-600 dark:text-red-400",
+    amber: "text-amber-600 dark:text-amber-400",
+  };
+  return (
+    <div className={`px-4 py-3 ${highlight ? "bg-muted/40" : ""}`}>
+      <p className={`text-xs flex items-center gap-1 mb-1 ${colorMap[color]}`}>{icon}{label}</p>
+      <p className={`text-sm font-bold tabular ${colorMap[color]}`}>{value}</p>
     </div>
   );
 }

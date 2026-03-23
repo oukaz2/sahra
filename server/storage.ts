@@ -10,7 +10,11 @@ import {
   type Invoice, type InsertInvoice,
 } from "@shared/schema";
 
-const sqlite = new Database("sahra.db");
+// On Vercel serverless, only /tmp is writable. Use it in production.
+const dbPath = process.env.VERCEL
+  ? "/tmp/sahra.db"
+  : process.env.DB_PATH ?? "sahra.db";
+const sqlite = new Database(dbPath);
 export const db = drizzle(sqlite);
 
 // Auto-migrate: create tables if not exist
@@ -42,6 +46,7 @@ sqlite.exec(`
     year INTEGER NOT NULL,
     total_grid_kwh REAL NOT NULL DEFAULT 0,
     total_solar_kwh REAL NOT NULL DEFAULT 0,
+    eehc_bill_egp REAL,
     status TEXT NOT NULL DEFAULT 'draft',
     created_at INTEGER NOT NULL
   );
@@ -72,6 +77,9 @@ sqlite.exec(`
     paid_at INTEGER
   );
 `);
+
+// Safe migration: add new columns to existing DBs without breaking them
+try { sqlite.exec(`ALTER TABLE billing_periods ADD COLUMN eehc_bill_egp REAL`); } catch (_) {}
 
 export interface IStorage {
   // Properties
