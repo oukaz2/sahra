@@ -59,9 +59,21 @@ async function buildAll() {
     logLevel: "info",
   });
 
-  // Vercel serverless entry — NOT bundled, Vercel handles deps via @vercel/node
-  // Just copy api/index.ts to dist so vercel.json can reference it cleanly
-  console.log("done — vercel entry: api/index.ts");
+  // Vercel serverless entry — bundled into a single CJS file so Vercel
+  // doesn't need to resolve relative imports across the project.
+  // better-sqlite3 is kept external (native addon, Vercel includes it via node_modules).
+  console.log("building vercel serverless entry...");
+  await esbuild({
+    entryPoints: ["api/index.ts"],
+    platform: "node",
+    bundle: true,
+    format: "cjs",
+    outfile: "dist/api.cjs",
+    external: ["better-sqlite3"],
+    minify: false,
+    logLevel: "info",
+  });
+  console.log("done");
 }
 
 buildAll().catch((err) => {

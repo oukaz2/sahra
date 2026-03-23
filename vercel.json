@@ -2,25 +2,25 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/index.ts",
+      "src": "dist/api.cjs",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": ["dist/public/**", "node_modules/better-sqlite3/**"]
+        "includeFiles": ["dist/public/**"]
       }
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/index.ts"
+      "dest": "/dist/api.cjs"
     },
     {
-      "src": "/assets/(.*)",
-      "dest": "/dist/public/assets/$1"
+      "src": "/(.*\\.(js|css|ico|png|svg|woff2?))",
+      "dest": "/dist/public/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/api/index.ts"
+      "dest": "/dist/api.cjs"
     }
   ]
 }
