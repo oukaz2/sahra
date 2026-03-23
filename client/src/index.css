@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Sahra — Deep desert night + solar amber accent */
+    /* Surfaces */
+    --background: 220 18% 97%;
+    --foreground: 222 25% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 25% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 25% 12%;
+
+    /* Primary: Solar amber/gold */
+    --primary: 38 92% 44%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: Slate */
+    --secondary: 220 14% 93%;
+    --secondary-foreground: 222 25% 20%;
+
+    /* Muted */
+    --muted: 220 14% 93%;
+    --muted-foreground: 220 10% 52%;
+
+    /* Accent: Soft amber tint */
+    --accent: 38 60% 92%;
+    --accent-foreground: 38 92% 28%;
+
+    /* Status */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Border / Input */
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 38 92% 44%;
+
+    --radius: 0.5rem;
+
+    /* Sidebar */
+    --sidebar-background: 222 28% 11%;
+    --sidebar-foreground: 220 15% 75%;
+    --sidebar-primary: 38 92% 52%;
+    --sidebar-primary-foreground: 222 28% 11%;
+    --sidebar-accent: 222 20% 18%;
+    --sidebar-accent-foreground: 220 15% 88%;
+    --sidebar-border: 222 20% 18%;
+    --sidebar-ring: 38 92% 52%;
+
+    /* Success / warning */
+    --success: 142 60% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 44%;
+    --warning-foreground: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 222 28% 9%;
+    --foreground: 220 15% 88%;
+    --card: 222 25% 12%;
+    --card-foreground: 220 15% 88%;
+    --popover: 222 25% 12%;
+    --popover-foreground: 220 15% 88%;
+
+    --primary: 38 88% 52%;
+    --primary-foreground: 222 28% 9%;
+
+    --secondary: 222 20% 18%;
+    --secondary-foreground: 220 15% 75%;
+
+    --muted: 222 20% 18%;
+    --muted-foreground: 220 10% 52%;
+
+    --accent: 222 20% 18%;
+    --accent-foreground: 38 88% 60%;
+
+    --destructive: 0 63% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 20% 20%;
+    --input: 222 20% 20%;
+    --ring: 38 88% 52%;
+
+    --sidebar-background: 222 30% 7%;
+    --sidebar-foreground: 220 15% 70%;
+    --sidebar-primary: 38 88% 52%;
+    --sidebar-primary-foreground: 222 30% 7%;
+    --sidebar-accent: 222 25% 13%;
+    --sidebar-accent-foreground: 220 15% 85%;
+    --sidebar-border: 222 25% 13%;
+    --sidebar-ring: 38 88% 52%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'General Sans', 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3, h4, h5, h6 { text-wrap: balance; }
+
+  /* Tabular numbers for all data cells */
+  .tabular { font-variant-numeric: tabular-nums lining-nums; }
+}
+
+/* Sahra brand: sidebar dark, content light */
+.sidebar-nav-link {
+  @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-150;
+  color: hsl(var(--sidebar-foreground));
+}
+.sidebar-nav-link:hover {
+  background: hsl(var(--sidebar-accent));
+  color: hsl(var(--sidebar-accent-foreground));
+}
+.sidebar-nav-link.active {
+  background: hsl(var(--sidebar-accent));
+  color: hsl(var(--sidebar-primary));
+  font-weight: 600;
+}
+
+/* Status badges */
+.badge-paid    { @apply bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400; }
+.badge-unpaid  { @apply bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400; }
+.badge-overdue { @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400; }
+.badge-draft   { @apply bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400; }
+.badge-issued  { @apply bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400; }
+
+/* KPI card glow accent */
+.kpi-glow {
+  box-shadow: 0 0 0 1px hsl(var(--border)), 0 2px 8px hsl(38 92% 44% / 0.06);
+}
+
+/* CSV upload dropzone */
+.dropzone {
+  @apply border-2 border-dashed border-border rounded-lg p-8 text-center transition-colors;
+}
+.dropzone:hover, .dropzone.drag-over {
+  @apply border-primary bg-accent;
+}
