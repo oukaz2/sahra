@@ -18756,14 +18756,14 @@ var require_etag = __commonJS({
   "node_modules/etag/index.js"(exports2, module2) {
     "use strict";
     module2.exports = etag;
-    var crypto = require("crypto");
+    var crypto2 = require("crypto");
     var Stats = require("fs").Stats;
     var toString = Object.prototype.toString;
     function entitytag(entity) {
       if (entity.length === 0) {
         return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"';
       }
-      var hash = crypto.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
+      var hash = crypto2.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
       var len = typeof entity === "string" ? Buffer.byteLength(entity, "utf8") : entity.length;
       return '"' + len.toString(16) + "-" + hash + '"';
     }
@@ -22178,17 +22178,17 @@ var require_content_disposition = __commonJS({
 // node_modules/cookie-signature/index.js
 var require_cookie_signature = __commonJS({
   "node_modules/cookie-signature/index.js"(exports2) {
-    var crypto = require("crypto");
+    var crypto2 = require("crypto");
     exports2.sign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Cookie value must be provided as a string.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
-      return val + "." + crypto.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+      return val + "." + crypto2.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
     };
     exports2.unsign = function(input, secret) {
       if ("string" != typeof input) throw new TypeError("Signed cookie string must be provided.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
       var tentativeValue = input.slice(0, input.lastIndexOf(".")), expectedInput = exports2.sign(tentativeValue, secret), expectedBuffer = Buffer.from(expectedInput), inputBuffer = Buffer.from(input);
-      return expectedBuffer.length === inputBuffer.length && crypto.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
+      return expectedBuffer.length === inputBuffer.length && crypto2.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
     };
   }
 });
@@ -23823,8 +23823,7 @@ var ColumnBuilder = class {
   }
   /** @internal Sets the name of the column to the key within the table definition if a name was not given. */
   setName(name) {
-    if (this.config.name !== "")
-      return;
+    if (this.config.name !== "") return;
     this.config.name = name;
   }
 };
@@ -24196,13 +24195,38 @@ var PgArray = class _PgArray extends PgColumn {
     const a = value.map(
       (v) => v === null ? null : is(this.baseColumn, _PgArray) ? this.baseColumn.mapToDriverValue(v, true) : this.baseColumn.mapToDriverValue(v)
     );
-    if (isNestedArray)
-      return a;
+    if (isNestedArray) return a;
     return makePgArray(a);
   }
 };
 
 // node_modules/drizzle-orm/pg-core/columns/enum.js
+var PgEnumObjectColumnBuilder = class extends PgColumnBuilder {
+  static [entityKind] = "PgEnumObjectColumnBuilder";
+  constructor(name, enumInstance) {
+    super(name, "string", "PgEnumObjectColumn");
+    this.config.enum = enumInstance;
+  }
+  /** @internal */
+  build(table) {
+    return new PgEnumObjectColumn(
+      table,
+      this.config
+    );
+  }
+};
+var PgEnumObjectColumn = class extends PgColumn {
+  static [entityKind] = "PgEnumObjectColumn";
+  enum;
+  enumValues = this.config.enum.enumValues;
+  constructor(table, config) {
+    super(table, config);
+    this.enum = config.enum;
+  }
+  getSQLType() {
+    return this.enum.enumName;
+  }
+};
 var isPgEnumSym = Symbol.for("drizzle:isPgEnum");
 function isPgEnum(obj) {
   return !!obj && typeof obj === "function" && isPgEnumSym in obj && obj[isPgEnumSym] === true;
@@ -24237,13 +24261,14 @@ var PgEnumColumn = class extends PgColumn {
 // node_modules/drizzle-orm/subquery.js
 var Subquery = class {
   static [entityKind] = "Subquery";
-  constructor(sql2, selection, alias, isWith = false) {
+  constructor(sql2, fields, alias, isWith = false, usedTables = []) {
     this._ = {
       brand: "Subquery",
       sql: sql2,
-      selectedFields: selection,
+      selectedFields: fields,
       alias,
-      isWith
+      isWith,
+      usedTables
     };
   }
   // getSQL(): SQL<unknown> {
@@ -24255,7 +24280,7 @@ var WithSubquery = class extends Subquery {
 };
 
 // node_modules/drizzle-orm/version.js
-var version = "0.39.3";
+var version = "0.45.1";
 
 // node_modules/drizzle-orm/tracing.js
 var otel;
@@ -24329,11 +24354,21 @@ var StringChunk = class {
 var SQL = class _SQL {
   constructor(queryChunks) {
     this.queryChunks = queryChunks;
+    for (const chunk of queryChunks) {
+      if (is(chunk, Table)) {
+        const schemaName = chunk[Table.Symbol.Schema];
+        this.usedTables.push(
+          schemaName === void 0 ? chunk[Table.Symbol.Name] : schemaName + "." + chunk[Table.Symbol.Name]
+        );
+      }
+    }
   }
   static [entityKind] = "SQL";
   /** @internal */
   decoder = noopDecoder;
   shouldInlineParams = false;
+  /** @internal */
+  usedTables = [];
   append(query) {
     this.queryChunks.push(...query.queryChunks);
     return this;
@@ -24692,6 +24727,8 @@ function mapResultRow(columns, row, joinsNotNullableMap) {
         decoder = field;
       } else if (is(field, SQL)) {
         decoder = field.decoder;
+      } else if (is(field, Subquery)) {
+        decoder = field._.sql.decoder;
       } else {
         decoder = field.sql.decoder;
       }
@@ -24734,7 +24771,7 @@ function orderSelectedFields(fields, pathPrefix) {
       return result;
     }
     const newPath = pathPrefix ? [...pathPrefix, name] : [name];
-    if (is(field, Column) || is(field, SQL) || is(field, SQL.Aliased)) {
+    if (is(field, Column) || is(field, SQL) || is(field, SQL.Aliased) || is(field, Subquery)) {
       result.push({ path: newPath, field });
     } else if (is(field, Table)) {
       result.push(...orderSelectedFields(field[Table.Symbol.Columns], newPath));
@@ -24773,8 +24810,7 @@ function mapUpdateSet(table, values) {
 function applyMixins(baseClass, extendedClasses) {
   for (const extendedClass of extendedClasses) {
     for (const name of Object.getOwnPropertyNames(extendedClass.prototype)) {
-      if (name === "constructor")
-        continue;
+      if (name === "constructor") continue;
       Object.defineProperty(
         baseClass.prototype,
         name,
@@ -24799,49 +24835,41 @@ function getColumnNameAndConfig(a, b) {
   };
 }
 function isConfig(data) {
-  if (typeof data !== "object" || data === null)
-    return false;
-  if (data.constructor.name !== "Object")
-    return false;
+  if (typeof data !== "object" || data === null) return false;
+  if (data.constructor.name !== "Object") return false;
   if ("logger" in data) {
     const type = typeof data["logger"];
-    if (type !== "boolean" && (type !== "object" || typeof data["logger"]["logQuery"] !== "function") && type !== "undefined")
-      return false;
+    if (type !== "boolean" && (type !== "object" || typeof data["logger"]["logQuery"] !== "function") && type !== "undefined") return false;
     return true;
   }
   if ("schema" in data) {
-    const type = typeof data["logger"];
-    if (type !== "object" && type !== "undefined")
-      return false;
+    const type = typeof data["schema"];
+    if (type !== "object" && type !== "undefined") return false;
     return true;
   }
   if ("casing" in data) {
-    const type = typeof data["logger"];
-    if (type !== "string" && type !== "undefined")
-      return false;
+    const type = typeof data["casing"];
+    if (type !== "string" && type !== "undefined") return false;
     return true;
   }
   if ("mode" in data) {
-    if (data["mode"] !== "default" || data["mode"] !== "planetscale" || data["mode"] !== void 0)
-      return false;
+    if (data["mode"] !== "default" || data["mode"] !== "planetscale" || data["mode"] !== void 0) return false;
     return true;
   }
   if ("connection" in data) {
     const type = typeof data["connection"];
-    if (type !== "string" && type !== "object" && type !== "undefined")
-      return false;
+    if (type !== "string" && type !== "object" && type !== "undefined") return false;
     return true;
   }
   if ("client" in data) {
     const type = typeof data["client"];
-    if (type !== "object" && type !== "function" && type !== "undefined")
-      return false;
+    if (type !== "object" && type !== "function" && type !== "undefined") return false;
     return true;
   }
-  if (Object.keys(data).length === 0)
-    return true;
+  if (Object.keys(data).length === 0) return true;
   return false;
 }
+var textDecoder = typeof TextDecoder === "undefined" ? null : new TextDecoder();
 
 // node_modules/drizzle-orm/pg-core/table.js
 var InlineForeignKeys = Symbol.for("drizzle:PgInlineForeignKeys");
@@ -24859,6 +24887,8 @@ var PgTable = class extends Table {
   [EnableRLS] = false;
   /** @internal */
   [Table.Symbol.ExtraConfigBuilder] = void 0;
+  /** @internal */
+  [Table.Symbol.ExtraConfigColumns] = {};
 };
 
 // node_modules/drizzle-orm/pg-core/primary-keys.js
@@ -25630,14 +25660,11 @@ var SQLiteBigInt = class extends SQLiteColumn {
     return "blob";
   }
   mapFromDriverValue(value) {
-    if (Buffer.isBuffer(value)) {
-      return BigInt(value.toString());
+    if (typeof Buffer !== "undefined" && Buffer.from) {
+      const buf = Buffer.isBuffer(value) ? value : value instanceof ArrayBuffer ? Buffer.from(value) : value.buffer ? Buffer.from(value.buffer, value.byteOffset, value.byteLength) : Buffer.from(value);
+      return BigInt(buf.toString("utf8"));
     }
-    if (value instanceof ArrayBuffer) {
-      const decoder = new TextDecoder();
-      return BigInt(decoder.decode(value));
-    }
-    return BigInt(String.fromCodePoint(...value));
+    return BigInt(textDecoder.decode(value));
   }
   mapToDriverValue(value) {
     return Buffer.from(value.toString());
@@ -25662,14 +25689,11 @@ var SQLiteBlobJson = class extends SQLiteColumn {
     return "blob";
   }
   mapFromDriverValue(value) {
-    if (Buffer.isBuffer(value)) {
-      return JSON.parse(value.toString());
+    if (typeof Buffer !== "undefined" && Buffer.from) {
+      const buf = Buffer.isBuffer(value) ? value : value instanceof ArrayBuffer ? Buffer.from(value) : value.buffer ? Buffer.from(value.buffer, value.byteOffset, value.byteLength) : Buffer.from(value);
+      return JSON.parse(buf.toString("utf8"));
     }
-    if (value instanceof ArrayBuffer) {
-      const decoder = new TextDecoder();
-      return JSON.parse(decoder.decode(value));
-    }
-    return JSON.parse(String.fromCodePoint(...value));
+    return JSON.parse(textDecoder.decode(value));
   }
   mapToDriverValue(value) {
     return Buffer.from(JSON.stringify(value));
@@ -25687,6 +25711,12 @@ var SQLiteBlobBufferBuilder = class extends SQLiteColumnBuilder {
 };
 var SQLiteBlobBuffer = class extends SQLiteColumn {
   static [entityKind] = "SQLiteBlobBuffer";
+  mapFromDriverValue(value) {
+    if (Buffer.isBuffer(value)) {
+      return value;
+    }
+    return Buffer.from(value);
+  }
   getSQLType() {
     return "blob";
   }
@@ -25875,12 +25905,63 @@ var SQLiteNumericBuilder = class extends SQLiteColumnBuilder {
 };
 var SQLiteNumeric = class extends SQLiteColumn {
   static [entityKind] = "SQLiteNumeric";
+  mapFromDriverValue(value) {
+    if (typeof value === "string") return value;
+    return String(value);
+  }
   getSQLType() {
     return "numeric";
   }
 };
-function numeric(name) {
-  return new SQLiteNumericBuilder(name ?? "");
+var SQLiteNumericNumberBuilder = class extends SQLiteColumnBuilder {
+  static [entityKind] = "SQLiteNumericNumberBuilder";
+  constructor(name) {
+    super(name, "number", "SQLiteNumericNumber");
+  }
+  /** @internal */
+  build(table) {
+    return new SQLiteNumericNumber(
+      table,
+      this.config
+    );
+  }
+};
+var SQLiteNumericNumber = class extends SQLiteColumn {
+  static [entityKind] = "SQLiteNumericNumber";
+  mapFromDriverValue(value) {
+    if (typeof value === "number") return value;
+    return Number(value);
+  }
+  mapToDriverValue = String;
+  getSQLType() {
+    return "numeric";
+  }
+};
+var SQLiteNumericBigIntBuilder = class extends SQLiteColumnBuilder {
+  static [entityKind] = "SQLiteNumericBigIntBuilder";
+  constructor(name) {
+    super(name, "bigint", "SQLiteNumericBigInt");
+  }
+  /** @internal */
+  build(table) {
+    return new SQLiteNumericBigInt(
+      table,
+      this.config
+    );
+  }
+};
+var SQLiteNumericBigInt = class extends SQLiteColumn {
+  static [entityKind] = "SQLiteNumericBigInt";
+  mapFromDriverValue = BigInt;
+  mapToDriverValue = String;
+  getSQLType() {
+    return "numeric";
+  }
+};
+function numeric(a, b) {
+  const { name, config } = getColumnNameAndConfig(a, b);
+  const mode = config?.mode;
+  return mode === "number" ? new SQLiteNumericNumberBuilder(name) : mode === "bigint" ? new SQLiteNumericBigIntBuilder(name) : new SQLiteNumericBuilder(name);
 }
 
 // node_modules/drizzle-orm/sqlite-core/columns/real.js
@@ -26015,6 +26096,20 @@ var sqliteTable = (name, columns, extraConfig) => {
   return sqliteTableBase(name, columns, extraConfig);
 };
 
+// node_modules/drizzle-orm/sqlite-core/utils.js
+function extractUsedTable(table) {
+  if (is(table, SQLiteTable)) {
+    return [`${table[Table.Symbol.BaseName]}`];
+  }
+  if (is(table, Subquery)) {
+    return table._.usedTables ?? [];
+  }
+  if (is(table, SQL)) {
+    return table.usedTables ?? [];
+  }
+  return [];
+}
+
 // node_modules/drizzle-orm/sqlite-core/query-builders/delete.js
 var SQLiteDeleteBase = class extends QueryPromise {
   constructor(table, session, dialect, withList) {
@@ -26098,7 +26193,12 @@ var SQLiteDeleteBase = class extends QueryPromise {
       this.dialect.sqlToQuery(this.getSQL()),
       this.config.returning,
       this.config.returning ? "all" : "run",
-      true
+      true,
+      void 0,
+      {
+        type: "delete",
+        tables: extractUsedTable(this.config.table)
+      }
     );
   }
   prepare() {
@@ -26149,8 +26249,7 @@ var CasingCache = class {
     this.convert = casing === "snake_case" ? toSnakeCase : casing === "camelCase" ? toCamelCase : noopCase;
   }
   getColumnCasing(column) {
-    if (!column.keyAsName)
-      return column.name;
+    if (!column.keyAsName) return column.name;
     const schema = column.table[Table.Symbol.Schema] ?? "public";
     const tableName = column.table[Table.Symbol.OriginalName];
     const key = `${schema}.${tableName}.${column.name}`;
@@ -26186,6 +26285,17 @@ var DrizzleError = class extends Error {
     this.cause = cause;
   }
 };
+var DrizzleQueryError = class _DrizzleQueryError extends Error {
+  constructor(query, params, cause) {
+    super(`Failed query: ${query}
+params: ${params}`);
+    this.query = query;
+    this.params = params;
+    this.cause = cause;
+    Error.captureStackTrace(this, _DrizzleQueryError);
+    if (cause) this.cause = cause;
+  }
+};
 var TransactionRollbackError = class extends DrizzleError {
   static [entityKind] = "TransactionRollbackError";
   constructor() {
@@ -26216,8 +26326,7 @@ var SQLiteDialect = class {
     return `'${str.replace(/'/g, "''")}'`;
   }
   buildWithCTE(queries) {
-    if (!queries?.length)
-      return void 0;
+    if (!queries?.length) return void 0;
     const withSqlChunks = [sql`with `];
     for (const [i, w] of queries.entries()) {
       withSqlChunks.push(sql`${sql.identifier(w._.alias)} as (${w._.sql})`);
@@ -26244,7 +26353,8 @@ var SQLiteDialect = class {
     const setSize = columnNames.length;
     return sql.join(columnNames.flatMap((colName, i) => {
       const col = tableColumns[colName];
-      const value = set[colName] ?? sql.param(col.onUpdateFn(), col);
+      const onUpdateFnResult = col.onUpdateFn?.();
+      const value = set[colName] ?? (is(onUpdateFnResult, SQL) ? onUpdateFnResult : sql.param(onUpdateFnResult, col));
       const res = sql`${sql.identifier(this.casing.getColumnCasing(col))} = ${value}`;
       if (i < setSize - 1) {
         return [res, sql.raw(", ")];
@@ -26301,11 +26411,29 @@ var SQLiteDialect = class {
         }
       } else if (is(field, Column)) {
         const tableName = field.table[Table.Symbol.Name];
-        if (isSingleTable) {
-          chunk.push(sql.identifier(this.casing.getColumnCasing(field)));
+        if (field.columnType === "SQLiteNumericBigInt") {
+          if (isSingleTable) {
+            chunk.push(sql`cast(${sql.identifier(this.casing.getColumnCasing(field))} as text)`);
+          } else {
+            chunk.push(
+              sql`cast(${sql.identifier(tableName)}.${sql.identifier(this.casing.getColumnCasing(field))} as text)`
+            );
+          }
         } else {
-          chunk.push(sql`${sql.identifier(tableName)}.${sql.identifier(this.casing.getColumnCasing(field))}`);
+          if (isSingleTable) {
+            chunk.push(sql.identifier(this.casing.getColumnCasing(field)));
+          } else {
+            chunk.push(sql`${sql.identifier(tableName)}.${sql.identifier(this.casing.getColumnCasing(field))}`);
+          }
         }
+      } else if (is(field, Subquery)) {
+        const entries = Object.entries(field._.selectedFields);
+        if (entries.length === 1) {
+          const entry = entries[0][1];
+          const fieldDecoder = is(entry, SQL) ? entry.decoder : is(entry, Column) ? { mapFromDriverValue: (v) => entry.mapFromDriverValue(v) } : entry.sql.decoder;
+          if (fieldDecoder) field._.sql.decoder = fieldDecoder;
+        }
+        chunk.push(field);
       }
       if (i < columnsLen - 1) {
         chunk.push(sql`, `);
@@ -26325,17 +26453,18 @@ var SQLiteDialect = class {
           joinsArray.push(sql` `);
         }
         const table = joinMeta.table;
+        const onSql = joinMeta.on ? sql` on ${joinMeta.on}` : void 0;
         if (is(table, SQLiteTable)) {
           const tableName = table[SQLiteTable.Symbol.Name];
           const tableSchema = table[SQLiteTable.Symbol.Schema];
           const origTableName = table[SQLiteTable.Symbol.OriginalName];
           const alias = tableName === origTableName ? void 0 : joinMeta.alias;
           joinsArray.push(
-            sql`${sql.raw(joinMeta.joinType)} join ${tableSchema ? sql`${sql.identifier(tableSchema)}.` : void 0}${sql.identifier(origTableName)}${alias && sql` ${sql.identifier(alias)}`} on ${joinMeta.on}`
+            sql`${sql.raw(joinMeta.joinType)} join ${tableSchema ? sql`${sql.identifier(tableSchema)}.` : void 0}${sql.identifier(origTableName)}${alias && sql` ${sql.identifier(alias)}`}${onSql}`
           );
         } else {
           joinsArray.push(
-            sql`${sql.raw(joinMeta.joinType)} join ${table} on ${joinMeta.on}`
+            sql`${sql.raw(joinMeta.joinType)} join ${table}${onSql}`
           );
         }
         if (index < joins.length - 1) {
@@ -26361,8 +26490,8 @@ var SQLiteDialect = class {
     return orderByList.length > 0 ? sql` order by ${sql.join(orderByList)}` : void 0;
   }
   buildFromTable(table) {
-    if (is(table, Table) && table[Table.Symbol.OriginalName] !== table[Table.Symbol.Name]) {
-      return sql`${sql.identifier(table[Table.Symbol.OriginalName])} ${sql.identifier(table[Table.Symbol.Name])}`;
+    if (is(table, Table) && table[Table.Symbol.IsAlias]) {
+      return sql`${sql`${sql.identifier(table[Table.Symbol.Schema] ?? "")}.`.if(table[Table.Symbol.Schema])}${sql.identifier(table[Table.Symbol.OriginalName])} ${sql.identifier(table[Table.Symbol.Name])}`;
     }
     return table;
   }
@@ -26868,6 +26997,8 @@ var SQLiteSelectQueryBuilderBase = class extends TypedQueryBuilder {
   isPartialSelect;
   session;
   dialect;
+  cacheConfig = void 0;
+  usedTables = /* @__PURE__ */ new Set();
   constructor({ table, fields, isPartialSelect, session, dialect, withList, distinct }) {
     super();
     this.config = {
@@ -26881,15 +27012,22 @@ var SQLiteSelectQueryBuilderBase = class extends TypedQueryBuilder {
     this.session = session;
     this.dialect = dialect;
     this._ = {
-      selectedFields: fields
+      selectedFields: fields,
+      config: this.config
     };
     this.tableName = getTableLikeName(table);
     this.joinsNotNullableMap = typeof this.tableName === "string" ? { [this.tableName]: true } : {};
+    for (const item of extractUsedTable(table)) this.usedTables.add(item);
+  }
+  /** @internal */
+  getUsedTables() {
+    return [...this.usedTables];
   }
   createJoin(joinType) {
     return (table, on) => {
       const baseTableName = this.tableName;
       const tableName = getTableLikeName(table);
+      for (const item of extractUsedTable(table)) this.usedTables.add(item);
       if (typeof tableName === "string" && this.config.joins?.some((join) => join.alias === tableName)) {
         throw new Error(`Alias "${tableName}" is already used in this query`);
       }
@@ -26929,6 +27067,7 @@ var SQLiteSelectQueryBuilderBase = class extends TypedQueryBuilder {
             this.joinsNotNullableMap[tableName] = true;
             break;
           }
+          case "cross":
           case "inner": {
             this.joinsNotNullableMap[tableName] = true;
             break;
@@ -26959,12 +27098,12 @@ var SQLiteSelectQueryBuilderBase = class extends TypedQueryBuilder {
    *
    * ```ts
    * // Select all users and their pets
-   * const usersWithPets: { user: User; pets: Pet | null }[] = await db.select()
+   * const usersWithPets: { user: User; pets: Pet | null; }[] = await db.select()
    *   .from(users)
    *   .leftJoin(pets, eq(users.id, pets.ownerId))
    *
    * // Select userId and petId
-   * const usersIdsAndPetIds: { userId: number; petId: number | null }[] = await db.select({
+   * const usersIdsAndPetIds: { userId: number; petId: number | null; }[] = await db.select({
    *   userId: users.id,
    *   petId: pets.id,
    * })
@@ -26987,12 +27126,12 @@ var SQLiteSelectQueryBuilderBase = class extends TypedQueryBuilder {
    *
    * ```ts
    * // Select all users and their pets
-   * const usersWithPets: { user: User | null; pets: Pet }[] = await db.select()
+   * const usersWithPets: { user: User | null; pets: Pet; }[] = await db.select()
    *   .from(users)
    *   .rightJoin(pets, eq(users.id, pets.ownerId))
    *
    * // Select userId and petId
-   * const usersIdsAndPetIds: { userId: number | null; petId: number }[] = await db.select({
+   * const usersIdsAndPetIds: { userId: number | null; petId: number; }[] = await db.select({
    *   userId: users.id,
    *   petId: pets.id,
    * })
@@ -27015,12 +27154,12 @@ var SQLiteSelectQueryBuilderBase = class extends TypedQueryBuilder {
    *
    * ```ts
    * // Select all users and their pets
-   * const usersWithPets: { user: User; pets: Pet }[] = await db.select()
+   * const usersWithPets: { user: User; pets: Pet; }[] = await db.select()
    *   .from(users)
    *   .innerJoin(pets, eq(users.id, pets.ownerId))
    *
    * // Select userId and petId
-   * const usersIdsAndPetIds: { userId: number; petId: number }[] = await db.select({
+   * const usersIdsAndPetIds: { userId: number; petId: number; }[] = await db.select({
    *   userId: users.id,
    *   petId: pets.id,
    * })
@@ -27043,12 +27182,12 @@ var SQLiteSelectQueryBuilderBase = class extends TypedQueryBuilder {
    *
    * ```ts
    * // Select all users and their pets
-   * const usersWithPets: { user: User | null; pets: Pet | null }[] = await db.select()
+   * const usersWithPets: { user: User | null; pets: Pet | null; }[] = await db.select()
    *   .from(users)
    *   .fullJoin(pets, eq(users.id, pets.ownerId))
    *
    * // Select userId and petId
-   * const usersIdsAndPetIds: { userId: number | null; petId: number | null }[] = await db.select({
+   * const usersIdsAndPetIds: { userId: number | null; petId: number | null; }[] = await db.select({
    *   userId: users.id,
    *   petId: pets.id,
    * })
@@ -27057,6 +27196,33 @@ var SQLiteSelectQueryBuilderBase = class extends TypedQueryBuilder {
    * ```
    */
   fullJoin = this.createJoin("full");
+  /**
+   * Executes a `cross join` operation by combining rows from two tables into a new table.
+   *
+   * Calling this method retrieves all rows from both main and joined tables, merging all rows from each table.
+   *
+   * See docs: {@link https://orm.drizzle.team/docs/joins#cross-join}
+   *
+   * @param table the table to join.
+   *
+   * @example
+   *
+   * ```ts
+   * // Select all users, each user with every pet
+   * const usersWithPets: { user: User; pets: Pet; }[] = await db.select()
+   *   .from(users)
+   *   .crossJoin(pets)
+   *
+   * // Select userId and petId
+   * const usersIdsAndPetIds: { userId: number; petId: number; }[] = await db.select({
+   *   userId: users.id,
+   *   petId: pets.id,
+   * })
+   *   .from(users)
+   *   .crossJoin(pets)
+   * ```
+   */
+  crossJoin = this.createJoin("cross");
   createSetOperator(type, isAll) {
     return (rightSelection) => {
       const rightSelect = typeof rightSelection === "function" ? rightSelection(getSQLiteSetOperators()) : rightSelection;
@@ -27348,8 +27514,13 @@ var SQLiteSelectQueryBuilderBase = class extends TypedQueryBuilder {
     return rest;
   }
   as(alias) {
+    const usedTables = [];
+    usedTables.push(...extractUsedTable(this.config.table));
+    if (this.config.joins) {
+      for (const it of this.config.joins) usedTables.push(...extractUsedTable(it.table));
+    }
     return new Proxy(
-      new Subquery(this.getSQL(), this.config.fields, alias),
+      new Subquery(this.getSQL(), this.config.fields, alias, false, [...new Set(usedTables)]),
       new SelectionProxyHandler({ alias, sqlAliasedBehavior: "alias", sqlBehavior: "error" })
     );
   }
@@ -27376,10 +27547,20 @@ var SQLiteSelectBase = class extends SQLiteSelectQueryBuilderBase {
       this.dialect.sqlToQuery(this.getSQL()),
       fieldsList,
       "all",
-      true
+      true,
+      void 0,
+      {
+        type: "select",
+        tables: [...this.usedTables]
+      },
+      this.cacheConfig
     );
     query.joinsNotNullableMap = this.joinsNotNullableMap;
     return query;
+  }
+  $withCache(config) {
+    this.cacheConfig = config === void 0 ? { config: {}, enable: true, autoInvalidate: true } : config === false ? { enable: false } : { enable: true, autoInvalidate: true, ...config };
+    return this;
   }
   prepare() {
     return this._prepare(false);
@@ -27569,8 +27750,7 @@ var SQLiteInsertBase = class extends QueryPromise {
    * ```
    */
   onConflictDoNothing(config = {}) {
-    if (!this.config.onConflict)
-      this.config.onConflict = [];
+    if (!this.config.onConflict) this.config.onConflict = [];
     if (config.target === void 0) {
       this.config.onConflict.push(sql` on conflict do nothing`);
     } else {
@@ -27615,8 +27795,7 @@ var SQLiteInsertBase = class extends QueryPromise {
         'You cannot use both "where" and "targetWhere"/"setWhere" at the same time - "where" is deprecated, use "targetWhere" or "setWhere" instead.'
       );
     }
-    if (!this.config.onConflict)
-      this.config.onConflict = [];
+    if (!this.config.onConflict) this.config.onConflict = [];
     const whereSql = config.where ? sql` where ${config.where}` : void 0;
     const targetWhereSql = config.targetWhere ? sql` where ${config.targetWhere}` : void 0;
     const setWhereSql = config.setWhere ? sql` where ${config.setWhere}` : void 0;
@@ -27641,7 +27820,12 @@ var SQLiteInsertBase = class extends QueryPromise {
       this.dialect.sqlToQuery(this.getSQL()),
       this.config.returning,
       this.config.returning ? "all" : "run",
-      true
+      true,
+      void 0,
+      {
+        type: "insert",
+        tables: extractUsedTable(this.config.table)
+      }
     );
   }
   prepare() {
@@ -27802,7 +27986,12 @@ var SQLiteUpdateBase = class extends QueryPromise {
       this.dialect.sqlToQuery(this.getSQL()),
       this.config.returning,
       this.config.returning ? "all" : "run",
-      true
+      true,
+      void 0,
+      {
+        type: "insert",
+        tables: extractUsedTable(this.config.table)
+      }
     );
   }
   prepare() {
@@ -28075,6 +28264,8 @@ var BaseSQLiteDatabase = class {
         );
       }
     }
+    this.$cache = { invalidate: async (_params) => {
+    } };
   }
   static [entityKind] = "BaseSQLiteDatabase";
   query;
@@ -28221,6 +28412,7 @@ var BaseSQLiteDatabase = class {
   update(table) {
     return new SQLiteUpdateBuilder(table, this.session, this.dialect);
   }
+  $cache;
   /**
    * Creates an insert query.
    *
@@ -28332,6 +28524,33 @@ var BaseSQLiteDatabase = class {
   }
 };
 
+// node_modules/drizzle-orm/cache/core/cache.js
+var Cache = class {
+  static [entityKind] = "Cache";
+};
+var NoopCache = class extends Cache {
+  strategy() {
+    return "all";
+  }
+  static [entityKind] = "NoopCache";
+  async get(_key) {
+    return void 0;
+  }
+  async put(_hashedQuery, _response, _tables, _config) {
+  }
+  async onMutate(_params) {
+  }
+};
+async function hashQuery(sql2, params) {
+  const dataToHash = `${sql2}-${JSON.stringify(params)}`;
+  const encoder = new TextEncoder();
+  const data = encoder.encode(dataToHash);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = [...new Uint8Array(hashBuffer)];
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  return hashHex;
+}
+
 // node_modules/drizzle-orm/sqlite-core/session.js
 var ExecuteResultSync = class extends QueryPromise {
   constructor(resultCb) {
@@ -28347,14 +28566,89 @@ var ExecuteResultSync = class extends QueryPromise {
   }
 };
 var SQLitePreparedQuery = class {
-  constructor(mode, executeMethod, query) {
+  constructor(mode, executeMethod, query, cache, queryMetadata, cacheConfig) {
     this.mode = mode;
     this.executeMethod = executeMethod;
     this.query = query;
+    this.cache = cache;
+    this.queryMetadata = queryMetadata;
+    this.cacheConfig = cacheConfig;
+    if (cache && cache.strategy() === "all" && cacheConfig === void 0) {
+      this.cacheConfig = { enable: true, autoInvalidate: true };
+    }
+    if (!this.cacheConfig?.enable) {
+      this.cacheConfig = void 0;
+    }
   }
   static [entityKind] = "PreparedQuery";
   /** @internal */
   joinsNotNullableMap;
+  /** @internal */
+  async queryWithCache(queryString, params, query) {
+    if (this.cache === void 0 || is(this.cache, NoopCache) || this.queryMetadata === void 0) {
+      try {
+        return await query();
+      } catch (e) {
+        throw new DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if (this.cacheConfig && !this.cacheConfig.enable) {
+      try {
+        return await query();
+      } catch (e) {
+        throw new DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if ((this.queryMetadata.type === "insert" || this.queryMetadata.type === "update" || this.queryMetadata.type === "delete") && this.queryMetadata.tables.length > 0) {
+      try {
+        const [res] = await Promise.all([
+          query(),
+          this.cache.onMutate({ tables: this.queryMetadata.tables })
+        ]);
+        return res;
+      } catch (e) {
+        throw new DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if (!this.cacheConfig) {
+      try {
+        return await query();
+      } catch (e) {
+        throw new DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if (this.queryMetadata.type === "select") {
+      const fromCache = await this.cache.get(
+        this.cacheConfig.tag ?? await hashQuery(queryString, params),
+        this.queryMetadata.tables,
+        this.cacheConfig.tag !== void 0,
+        this.cacheConfig.autoInvalidate
+      );
+      if (fromCache === void 0) {
+        let result;
+        try {
+          result = await query();
+        } catch (e) {
+          throw new DrizzleQueryError(queryString, params, e);
+        }
+        await this.cache.put(
+          this.cacheConfig.tag ?? await hashQuery(queryString, params),
+          result,
+          // make sure we send tables that were used in a query only if user wants to invalidate it on each write
+          this.cacheConfig.autoInvalidate ? this.queryMetadata.tables : [],
+          this.cacheConfig.tag !== void 0,
+          this.cacheConfig.config
+        );
+        return result;
+      }
+      return fromCache;
+    }
+    try {
+      return await query();
+    } catch (e) {
+      throw new DrizzleQueryError(queryString, params, e);
+    }
+  }
   getQuery() {
     return this.query;
   }
@@ -28392,8 +28686,16 @@ var SQLiteSession = class {
     this.dialect = dialect;
   }
   static [entityKind] = "SQLiteSession";
-  prepareOneTimeQuery(query, fields, executeMethod, isResponseInArrayMode) {
-    return this.prepareQuery(query, fields, executeMethod, isResponseInArrayMode);
+  prepareOneTimeQuery(query, fields, executeMethod, isResponseInArrayMode, customResultMapper, queryMetadata, cacheConfig) {
+    return this.prepareQuery(
+      query,
+      fields,
+      executeMethod,
+      isResponseInArrayMode,
+      customResultMapper,
+      queryMetadata,
+      cacheConfig
+    );
   }
   run(query) {
     const staticQuery = this.dialect.sqlToQuery(query);
@@ -28452,15 +28754,20 @@ var BetterSQLiteSession = class extends SQLiteSession {
     this.client = client;
     this.schema = schema;
     this.logger = options.logger ?? new NoopLogger();
+    this.cache = options.cache ?? new NoopCache();
   }
   static [entityKind] = "BetterSQLiteSession";
   logger;
-  prepareQuery(query, fields, executeMethod, isResponseInArrayMode, customResultMapper) {
+  cache;
+  prepareQuery(query, fields, executeMethod, isResponseInArrayMode, customResultMapper, queryMetadata, cacheConfig) {
     const stmt = this.client.prepare(query.sql);
     return new PreparedQuery(
       stmt,
       query,
       this.logger,
+      this.cache,
+      queryMetadata,
+      cacheConfig,
       fields,
       executeMethod,
       isResponseInArrayMode,
@@ -28490,8 +28797,8 @@ var BetterSQLiteTransaction = class _BetterSQLiteTransaction extends SQLiteTrans
   }
 };
 var PreparedQuery = class extends SQLitePreparedQuery {
-  constructor(stmt, query, logger, fields, executeMethod, _isResponseInArrayMode, customResultMapper) {
-    super("sync", executeMethod, query);
+  constructor(stmt, query, logger, cache, queryMetadata, cacheConfig, fields, executeMethod, _isResponseInArrayMode, customResultMapper) {
+    super("sync", executeMethod, query, cache, queryMetadata, cacheConfig);
     this.stmt = stmt;
     this.logger = logger;
     this.fields = fields;
@@ -28580,8 +28887,7 @@ function drizzle(...params) {
   }
   if (isConfig(params[0])) {
     const { connection, client, ...drizzleConfig } = params[0];
-    if (client)
-      return construct(client, drizzleConfig);
+    if (client) return construct(client, drizzleConfig);
     if (typeof connection === "object") {
       const { source, ...options } = connection;
       const instance2 = new import_better_sqlite3.default(source, options);
@@ -32923,6 +33229,8 @@ var billingPeriods = sqliteTable("billing_periods", {
   totalSolarKwh: real("total_solar_kwh").notNull().default(0),
   eehcBillEgp: real("eehc_bill_egp"),
   // optional: EEHC master meter bill for reconciliation
+  lossAllocPct: real("loss_alloc_pct").default(0),
+  // technical loss % distributed across tenants
   status: text("status").notNull().default("draft"),
   // draft | issued | closed
   createdAt: integer("created_at").notNull().$defaultFn(() => Date.now())
@@ -33026,6 +33334,10 @@ sqlite.exec(`
 `);
 try {
   sqlite.exec(`ALTER TABLE billing_periods ADD COLUMN eehc_bill_egp REAL`);
+} catch (_) {
+}
+try {
+  sqlite.exec(`ALTER TABLE billing_periods ADD COLUMN loss_alloc_pct REAL NOT NULL DEFAULT 0`);
 } catch (_) {
 }
 var SqliteStorage = class {
@@ -33316,6 +33628,12 @@ function registerRoutes(httpServer2, app2) {
     const period = storage.createBillingPeriod(parsed.data);
     res.status(201).json(period);
   });
+  app2.patch("/api/billing-periods/:id/loss", (req, res) => {
+    const { lossAllocPct } = req.body;
+    const updated = storage.updateBillingPeriod(Number(req.params.id), { lossAllocPct: Number(lossAllocPct) });
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  });
   app2.patch("/api/billing-periods/:id/eehc", (req, res) => {
     const { eehcBillEgp } = req.body;
     const updated = storage.updateBillingPeriod(Number(req.params.id), { eehcBillEgp: Number(eehcBillEgp) });
@@ -33333,13 +33651,16 @@ function registerRoutes(httpServer2, app2) {
       return res.status(400).json({ error: "No readings provided" });
     }
     const discountPct = prop.discountPct / 100;
+    const lossAllocPct = (period.lossAllocPct ?? 0) / 100;
     const totalConsumption = readings.reduce((s, r) => s + r.consumptionKwh, 0);
     const solarPct = Math.min(totalSolarKwh / totalConsumption, 1);
     const existingInvoices = storage.getAllInvoices(period.propertyId);
     let invoiceCounter = existingInvoices.length + 1;
     const created = readings.map((r) => {
-      const solarShare = Math.round(r.consumptionKwh * solarPct * 100) / 100;
-      const netKwh = Math.max(r.consumptionKwh - solarShare, 0);
+      const lossKwh = Math.round(r.consumptionKwh * lossAllocPct * 100) / 100;
+      const billedKwh = r.consumptionKwh + lossKwh;
+      const solarShare = Math.round(billedKwh * solarPct * 100) / 100;
+      const netKwh = Math.max(billedKwh - solarShare, 0);
       const grossGridCharge = calcTieredCost(r.consumptionKwh);
       const netGridCharge = calcTieredCost(netKwh);
       const rawCredit = Math.round((grossGridCharge - netGridCharge) * 100) / 100;
@@ -33349,7 +33670,7 @@ function registerRoutes(httpServer2, app2) {
       const reading = storage.createMeterReading({
         billingPeriodId: periodId,
         tenantId: r.tenantId,
-        consumptionKwh: r.consumptionKwh,
+        consumptionKwh: billedKwh,
         solarShareKwh: solarShare,
         gridChargeEgp: gridCharge,
         solarCreditEgp: solarCredit,

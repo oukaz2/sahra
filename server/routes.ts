@@ -99,6 +99,14 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.status(201).json(period);
   });
 
+  // Update loss allocation %
+  app.patch("/api/billing-periods/:id/loss", (req, res) => {
+    const { lossAllocPct } = req.body;
+    const updated = storage.updateBillingPeriod(Number(req.params.id), { lossAllocPct: Number(lossAllocPct) });
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  });
+
   // Update EEHC bill for reconciliation
   app.patch("/api/billing-periods/:id/eehc", (req, res) => {
     const { eehcBillEgp } = req.body;
@@ -126,6 +134,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
     }
 
     const discountPct = prop.discountPct / 100;
+    const lossAllocPct = (period.lossAllocPct ?? 0) / 100;
     const totalConsumption = readings.reduce((s: number, r: any) => s + r.consumptionKwh, 0);
     const solarPct = Math.min(totalSolarKwh / totalConsumption, 1);
 
@@ -133,11 +142,13 @@ export function registerRoutes(httpServer: Server, app: Express) {
     let invoiceCounter = existingInvoices.length + 1;
 
     const created = readings.map((r: any) => {
+      // Apply loss allocation: each tenant absorbs their proportional share of grid losses
+      const lossKwh = Math.round(r.consumptionKwh * lossAllocPct * 100) / 100;
+      const billedKwh = r.consumptionKwh + lossKwh;
+
       // Tier-jump fix: reduce kWh by solar share BEFORE tiered calc.
-      // This correctly moves tenants into lower tiers when solar covers part
-      // of their consumption — the most accurate representation of true savings.
-      const solarShare = Math.round(r.consumptionKwh * solarPct * 100) / 100;
-      const netKwh = Math.max(r.consumptionKwh - solarShare, 0);
+      const solarShare = Math.round(billedKwh * solarPct * 100) / 100;
+      const netKwh = Math.max(billedKwh - solarShare, 0);
 
       const grossGridCharge = calcTieredCost(r.consumptionKwh); // what they'd pay without solar
       const netGridCharge = calcTieredCost(netKwh);             // what they pay with solar
@@ -153,7 +164,7 @@ export function registerRoutes(httpServer: Server, app: Express) {
       const reading = storage.createMeterReading({
         billingPeriodId: periodId,
         tenantId: r.tenantId,
-        consumptionKwh: r.consumptionKwh,
+        consumptionKwh: billedKwh,
         solarShareKwh: solarShare,
         gridChargeEgp: gridCharge,
         solarCreditEgp: solarCredit,

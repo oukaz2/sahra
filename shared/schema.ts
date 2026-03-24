@@ -43,6 +43,7 @@ export const billingPeriods = sqliteTable("billing_periods", {
   totalGridKwh: real("total_grid_kwh").notNull().default(0),
   totalSolarKwh: real("total_solar_kwh").notNull().default(0),
   eehcBillEgp: real("eehc_bill_egp"), // optional: EEHC master meter bill for reconciliation
+  lossAllocPct: real("loss_alloc_pct").default(0), // technical loss % distributed across tenants
   status: text("status").notNull().default("draft"), // draft | issued | closed
   createdAt: integer("created_at").notNull().$defaultFn(() => Date.now()),
 });

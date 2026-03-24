@@ -80,6 +80,7 @@ sqlite.exec(`
 
 // Safe migration: add new columns to existing DBs without breaking them
 try { sqlite.exec(`ALTER TABLE billing_periods ADD COLUMN eehc_bill_egp REAL`); } catch (_) {}
+try { sqlite.exec(`ALTER TABLE billing_periods ADD COLUMN loss_alloc_pct REAL NOT NULL DEFAULT 0`); } catch (_) {}
 
 export interface IStorage {
   // Properties

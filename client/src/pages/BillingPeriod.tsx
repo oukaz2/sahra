@@ -31,6 +31,8 @@ export default function BillingPeriod() {
   const [solarKwh, setSolarKwh] = useState("");
   const [eehcBill, setEehcBill] = useState("");
   const [eehcSaved, setEehcSaved] = useState(false);
+  const [lossAllocPct, setLossAllocPct] = useState("");
+  const [lossSaved, setLossSaved] = useState(false);
 
   const { data: period, isLoading: periodLoading } = useQuery<BP>({
     queryKey: ["/api/billing-periods", id],
@@ -60,6 +62,17 @@ export default function BillingPeriod() {
       setSolarKwh("");
     },
     onError: () => toast({ title: "Settlement failed", variant: "destructive" }),
+  });
+
+  const lossMutation = useMutation({
+    mutationFn: (pct: number) =>
+      apiRequest("PATCH", `/api/billing-periods/${id}/loss`, { lossAllocPct: pct }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/billing-periods", id] });
+      setLossSaved(true);
+      setTimeout(() => setLossSaved(false), 2000);
+      toast({ title: "Loss allocation saved" });
+    },
   });
 
   const eehcMutation = useMutation({
@@ -407,13 +420,39 @@ export default function BillingPeriod() {
                 />
               )}
 
-              {/* Loss Allocation — coming soon */}
-              <div className="flex items-center gap-2 pt-1 border-t" style={{ borderColor: "hsl(var(--border))" }}>
-                <span className="text-xs text-muted-foreground">Loss Allocation (hallway / common area losses)</span>
-                <span className="text-xs px-1.5 py-0.5 rounded font-medium"
-                  style={{ background: "hsl(38 88% 52% / 0.12)", color: "hsl(38 88% 45%)" }}>
-                  Coming soon
-                </span>
+              {/* Loss Allocation — now active */}
+              <div className="pt-1 border-t" style={{ borderColor: "hsl(var(--border))" }}>
+                <p className="text-xs font-medium mb-2">Technical Loss Allocation</p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Distribute grid losses (hallways, common areas) proportionally across all tenants.
+                  Enter the loss % between master meter and sum of sub-meters.
+                </p>
+                <div className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <Label className="text-xs text-muted-foreground mb-1.5 block">Loss % (e.g. 3 for 3%)</Label>
+                    <Input
+                      type="number"
+                      placeholder={period?.lossAllocPct ? String(period.lossAllocPct) : "0"}
+                      value={lossAllocPct}
+                      onChange={e => setLossAllocPct(e.target.value)}
+                      min="0" max="20"
+                      data-testid="input-loss-pct"
+                    />
+                  </div>
+                  <Button
+                    variant="outline" size="sm"
+                    disabled={!lossAllocPct || lossMutation.isPending}
+                    onClick={() => lossMutation.mutate(Number(lossAllocPct))}
+                    data-testid="button-save-loss"
+                  >
+                    {lossSaved ? <CheckCircle2 size={13} className="text-green-500" /> : "Save"}
+                  </Button>
+                </div>
+                {(period?.lossAllocPct ?? 0) > 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5">
+                    {period!.lossAllocPct}% loss applied — each tenant's billed kWh is increased proportionally
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>

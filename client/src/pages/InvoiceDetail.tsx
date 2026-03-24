@@ -48,149 +48,179 @@ export default function InvoiceDetail() {
 
   const handleDownloadPDF = () => {
     if (!inv) return;
-    // Dynamic import to keep bundle size reasonable
     import("jspdf").then(({ default: jsPDF }) => {
       const doc = new jsPDF({ unit: "mm", format: "a4" });
       const W = 210;
       const margin = 20;
+      const col2 = W - margin;
+      const hasSolar = inv.solarCreditEgp > 0;
 
-      // Header background
-      doc.setFillColor(38, 38, 48);
-      doc.rect(0, 0, W, 45, "F");
-
-      // Sahra brand name
+      // ── Header ──────────────────────────────────────────────────
+      doc.setFillColor(28, 28, 40);
+      doc.rect(0, 0, W, 48, "F");
       doc.setTextColor(255, 185, 60);
       doc.setFontSize(22);
       doc.setFont("helvetica", "bold");
       doc.text("SAHRA", margin, 22);
-
-      doc.setTextColor(180, 180, 200);
+      doc.setTextColor(160, 160, 185);
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text("Solar Billing Engine · sahra.energy", margin, 30);
-
-      // Invoice badge
+      doc.text("Solar Billing Engine  |  sahra.energy", margin, 31);
       doc.setTextColor(255, 185, 60);
-      doc.setFontSize(11);
+      doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
-      doc.text("INVOICE", W - margin - 30, 20);
-
+      doc.text("INVOICE", col2, 20, { align: "right" });
       doc.setTextColor(200, 200, 220);
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text(inv.invoiceNumber, W - margin - 30, 28);
-      doc.text(`Issued: ${fmtDate(inv.issuedAt)}`, W - margin - 30, 34);
+      doc.text(inv.invoiceNumber, col2, 28, { align: "right" });
+      doc.text(`Issued: ${fmtDate(inv.issuedAt)}`, col2, 35, { align: "right" });
 
-      // Property + Tenant info
-      let y = 60;
-      doc.setTextColor(60, 60, 70);
-      doc.setFontSize(9);
+      // ── Billed To / Property ─────────────────────────────────────
+      let y = 62;
+      doc.setTextColor(100, 100, 115);
+      doc.setFontSize(8);
       doc.setFont("helvetica", "bold");
       doc.text("BILLED TO", margin, y);
-      doc.text("PROPERTY", W / 2, y);
-
+      doc.text("PROPERTY", W / 2 + 5, y);
+      y += 5;
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
-      y += 6;
-      doc.setTextColor(30, 30, 40);
-      doc.text(inv.tenant?.name ?? "—", margin, y);
-      doc.text(inv.property?.name ?? "—", W / 2, y);
-      doc.setFontSize(9);
-      doc.setTextColor(100, 100, 110);
-      doc.text(`Unit: ${inv.tenant?.unit ?? "—"}`, margin, y + 5);
-      doc.text(inv.property?.location ?? "—", W / 2, y + 5);
-      doc.text(`Meter: ${inv.tenant?.meterCode ?? "—"}`, margin, y + 10);
-      doc.text(`Period: ${inv.period?.label ?? "—"}`, W / 2, y + 10);
-
-      // Divider
-      y += 24;
-      doc.setDrawColor(220, 220, 230);
-      doc.line(margin, y, W - margin, y);
-
-      // Breakdown table header
-      y += 8;
-      doc.setFillColor(248, 248, 252);
-      doc.rect(margin, y - 4, W - 2 * margin, 8, "F");
-      doc.setTextColor(80, 80, 95);
+      doc.setTextColor(25, 25, 35);
+      doc.text(inv.tenant?.name ?? "-", margin, y);
+      doc.text(inv.property?.name ?? "-", W / 2 + 5, y);
       doc.setFontSize(8.5);
-      doc.setFont("helvetica", "bold");
-      doc.text("DESCRIPTION", margin + 2, y + 1);
-      doc.text("AMOUNT (EGP)", W - margin - 2, y + 1, { align: "right" });
+      doc.setTextColor(100, 100, 115);
+      doc.text(`Unit: ${inv.tenant?.unit ?? "-"}`, margin, y + 5);
+      doc.text(inv.property?.location ?? "-", W / 2 + 5, y + 5);
+      doc.text(`Meter: ${inv.tenant?.meterCode ?? "-"}`, margin, y + 10);
+      doc.text(`Billing Period: ${inv.period?.label ?? "-"}`, W / 2 + 5, y + 10);
 
-      // Row 1: Standard Grid Cost
-      y += 12;
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(40, 40, 50);
-      doc.setFontSize(9.5);
-      doc.text("Standard Grid Cost", margin + 2, y);
-      doc.text(`${fmtEgp(inv.gridChargeEgp)}`, W - margin - 2, y, { align: "right" });
-      doc.setTextColor(110, 110, 120);
+      // ── Section: Tariff Breakdown ─────────────────────────────────
+      y += 22;
+      doc.setDrawColor(220, 220, 230);
+      doc.line(margin, y, col2, y);
+      y += 7;
+
+      // Table header
+      doc.setFillColor(245, 245, 250);
+      doc.rect(margin, y - 3, col2 - margin, 7, "F");
       doc.setFontSize(8);
-      doc.text(`${inv.consumptionKwh.toLocaleString()} kWh consumed · Egyptian tiered tariff`, margin + 2, y + 5);
-
-      // Row 2: Solar Credit
-      y += 14;
-      doc.setFillColor(255, 251, 235);
-      doc.rect(margin, y - 4, W - 2 * margin, 12, "F");
-      doc.setTextColor(40, 40, 50);
-      doc.setFontSize(9.5);
-      doc.setFont("helvetica", "normal");
-      doc.text("Solar Credit", margin + 2, y);
-      doc.setTextColor(180, 100, 0);
       doc.setFont("helvetica", "bold");
-      doc.text(`-${fmtEgp(inv.solarCreditEgp)}`, W - margin - 2, y, { align: "right" });
-      doc.setTextColor(130, 100, 30);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.text(`${inv.solarShareKwh.toLocaleString()} kWh from ${inv.property?.name} solar plant · ${inv.property?.discountPct ?? 15}% discount`, margin + 2, y + 5);
+      doc.setTextColor(80, 80, 100);
+      doc.text("TARIFF BRACKET", margin + 2, y + 2);
+      doc.text("kWh", 120, y + 2, { align: "right" });
+      doc.text("RATE (EGP/kWh)", 155, y + 2, { align: "right" });
+      doc.text("AMOUNT (EGP)", col2 - 1, y + 2, { align: "right" });
+      y += 9;
 
-      // Total
-      y += 18;
-      doc.setDrawColor(200, 200, 210);
-      doc.line(margin, y, W - margin, y);
+      // Calculate tier breakdown
+      const tiers = [
+        { label: "Tier 1: 0 - 200 kWh", from: 0, to: 200, rate: 0.92 },
+        { label: "Tier 2: 201 - 350 kWh", from: 200, to: 350, rate: 1.17 },
+        { label: "Tier 3: 351 - 650 kWh", from: 350, to: 650, rate: 1.63 },
+        { label: "Tier 4: 651 - 1000 kWh", from: 650, to: 1000, rate: 2.19 },
+        { label: "Tier 5: > 1000 kWh", from: 1000, to: Infinity, rate: 2.59 },
+      ];
+      const kwh = inv.consumptionKwh;
+      let remaining = kwh;
+      let rowAlt = false;
+      tiers.forEach(tier => {
+        const used = Math.min(Math.max(remaining, 0), tier.to - tier.from);
+        remaining -= used;
+        if (used <= 0) return;
+        const amt = used * tier.rate;
+        if (rowAlt) { doc.setFillColor(250, 250, 253); doc.rect(margin, y - 3, col2 - margin, 6, "F"); }
+        rowAlt = !rowAlt;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(40, 40, 55);
+        doc.text(tier.label, margin + 2, y + 1);
+        doc.setTextColor(80, 80, 100);
+        doc.text(used.toFixed(0), 120, y + 1, { align: "right" });
+        doc.text(tier.rate.toFixed(2), 155, y + 1, { align: "right" });
+        doc.setTextColor(40, 40, 55);
+        doc.text(fmtEgp(amt), col2 - 1, y + 1, { align: "right" });
+        y += 6;
+      });
+
+      // Subtotal grid cost
+      doc.setDrawColor(210, 210, 220);
+      doc.line(margin, y, col2, y);
+      y += 5;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(40, 40, 55);
+      doc.text(`Total Grid Cost (${kwh.toLocaleString()} kWh)`, margin + 2, y);
+      doc.text(`${fmtEgp(inv.gridChargeEgp)} EGP`, col2 - 1, y, { align: "right" });
       y += 8;
-      doc.setFontSize(12);
+
+      // ── Solar Credit (conditional) ────────────────────────────────
+      if (hasSolar) {
+        doc.setFillColor(255, 251, 235);
+        doc.rect(margin, y - 3, col2 - margin, 14, "F");
+        doc.setDrawColor(230, 170, 60);
+        doc.rect(margin, y - 3, col2 - margin, 14, "S");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(40, 40, 55);
+        doc.text("Solar Credit", margin + 3, y + 2);
+        doc.setTextColor(170, 95, 0);
+        doc.text(`-${fmtEgp(inv.solarCreditEgp)} EGP`, col2 - 1, y + 2, { align: "right" });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(130, 95, 25);
+        doc.text(`${inv.solarShareKwh.toFixed(1)} kWh from on-site solar plant  |  ${inv.property?.discountPct ?? 15}% tenant discount applied`, margin + 3, y + 8);
+        y += 18;
+      }
+
+      // ── Total Due ─────────────────────────────────────────────────
+      doc.setDrawColor(180, 180, 195);
+      doc.line(margin, y, col2, y);
+      y += 6;
+      doc.setFontSize(13);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(30, 30, 40);
+      doc.setTextColor(25, 25, 35);
       doc.text("TOTAL DUE", margin + 2, y);
-      doc.setTextColor(38, 92, 44);
-      doc.text(`${fmtEgp(inv.totalDueEgp)} EGP`, W - margin - 2, y, { align: "right" });
+      doc.setTextColor(20, 110, 45);
+      doc.text(`${fmtEgp(inv.totalDueEgp)} EGP`, col2 - 1, y, { align: "right" });
+      y += 10;
 
-      // Savings callout box
-      y += 16;
-      const savings = inv.gridChargeEgp - inv.totalDueEgp;
-      doc.setFillColor(255, 248, 225);
-      doc.setDrawColor(255, 185, 60);
-      doc.roundedRect(margin, y, W - 2 * margin, 18, 2, 2, "FD");
-      doc.setTextColor(120, 70, 0);
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "bold");
-      doc.text(`🌞 You saved ${fmtEgp(savings)} EGP this month thanks to solar energy`, margin + 6, y + 7);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.text(`${inv.solarShareKwh.toLocaleString()} kWh of your consumption was covered by the on-site solar plant`, margin + 6, y + 13);
+      // ── Savings callout (solar only, no emoji) ────────────────────
+      if (hasSolar) {
+        const savings = inv.gridChargeEgp - inv.totalDueEgp;
+        doc.setFillColor(255, 248, 225);
+        doc.setDrawColor(255, 185, 60);
+        doc.roundedRect(margin, y, col2 - margin, 16, 2, 2, "FD");
+        doc.setTextColor(120, 70, 0);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.text(`>> Solar savings this month: ${fmtEgp(savings)} EGP`, margin + 4, y + 6);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text(`${inv.solarShareKwh.toFixed(1)} kWh of your consumption was covered by the on-site solar plant`, margin + 4, y + 12);
+        y += 20;
+      }
 
-      // Status
-      y += 26;
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "bold");
+      // ── Status ────────────────────────────────────────────────────
+      y += 2;
       const statusColor: Record<string, [number, number, number]> = {
-        paid: [34, 120, 50], unpaid: [160, 120, 0], overdue: [180, 40, 40]
+        paid: [25, 110, 45], unpaid: [150, 110, 0], overdue: [180, 40, 40]
       };
       const sc = statusColor[inv.status] ?? [100, 100, 100];
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
       doc.setTextColor(...sc);
-      doc.text(`Status: ${inv.status.toUpperCase()}${inv.status === "paid" && inv.paidAt ? ` · Paid on ${fmtDate(inv.paidAt)}` : ""}`, margin, y);
+      doc.text(`Status: ${inv.status.toUpperCase()}${inv.status === "paid" && inv.paidAt ? `  |  Paid on ${fmtDate(inv.paidAt)}` : ""}`, margin, y);
 
-      // Footer
-      y = 268;
-      doc.setDrawColor(220, 220, 230);
-      doc.line(margin, y, W - margin, y);
-      y += 6;
-      doc.setTextColor(150, 150, 160);
+      // ── Footer ────────────────────────────────────────────────────
+      doc.setDrawColor(210, 210, 225);
+      doc.line(margin, 275, col2, 275);
+      doc.setTextColor(150, 150, 165);
       doc.setFontSize(7.5);
       doc.setFont("helvetica", "normal");
-      doc.text("Sahra · Solar Billing Engine · sahra.energy", margin, y);
-      doc.text("This invoice is generated automatically by the Sahra platform.", W - margin, y, { align: "right" });
+      doc.text("Sahra  |  Solar Billing Engine  |  sahra.energy", margin, 280);
+      doc.text("Generated automatically by the Sahra platform.", col2, 280, { align: "right" });
 
       doc.save(`${inv.invoiceNumber}.pdf`);
       toast({ title: "Invoice downloaded" });
