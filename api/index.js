@@ -28600,7 +28600,7 @@ function drizzle(...params) {
 })(drizzle || (drizzle = {}));
 
 // server/storage.ts
-var import_better_sqlite33 = __toESM(require("better-sqlite3"), 1);
+var import_better_sqlite33 = __toESM(require("better-sqlite3"));
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
