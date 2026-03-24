@@ -89,7 +89,7 @@ async function buildAll() {
     platform: "node",
     bundle: true,
     format: "cjs",
-    outfile: "api/index.js",
+    outfile: "api/index.cjs",
     external: ["better-sqlite3"],
     minify: false,
     logLevel: "info",
