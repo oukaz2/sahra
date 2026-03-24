@@ -12,7 +12,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertTenantSchema } from "@shared/schema";
 import type { InsertTenant, Tenant, BillingPeriod } from "@shared/schema";
-import { Users, Plus, FileText, CalendarDays, Zap, ArrowRight } from "lucide-react";
+import { Users, Plus, FileText, CalendarDays, Zap, ArrowRight, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 
@@ -51,6 +51,26 @@ export default function PropertyDetail() {
       toast({ title: "Tenant added" });
       tenantForm.reset({ propertyId: Number(id), name: "", unit: "", meterCode: "", email: "", phone: "", status: "active" });
       setTenantDialogOpen(false);
+    },
+    onError: () => toast({ title: "Error", variant: "destructive" }),
+  });
+
+  const removeTenantMutation = useMutation({
+    mutationFn: (tenantId: number) => apiRequest("DELETE", `/api/tenants/${tenantId}`).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/properties", id, "tenants"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/properties"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+      toast({ title: "Tenant removed" });
+    },
+    onError: () => toast({ title: "Error", variant: "destructive" }),
+  });
+
+  const toggleTenantMutation = useMutation({
+    mutationFn: ({ tenantId, status }: { tenantId: number; status: string }) =>
+      apiRequest("PATCH", `/api/tenants/${tenantId}/status`, { status: status === "active" ? "inactive" : "active" }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/properties", id, "tenants"] });
     },
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
@@ -166,7 +186,7 @@ export default function PropertyDetail() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b" style={{ borderColor: "hsl(var(--border))" }}>
-                  {["Tenant", "Unit", "Meter Code", "Contact", "Status"].map(h => (
+                  {["Tenant", "Unit", "Meter Code", "Contact", "Status", ""].map(h => (
                     <th key={h} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-3">{h}</th>
                   ))}
                 </tr>
@@ -187,6 +207,22 @@ export default function PropertyDetail() {
                           <Badge variant="outline" className={t.status === "active" ? "badge-paid text-xs" : "badge-draft text-xs"}>
                             {t.status}
                           </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                              title={t.status === "active" ? "Deactivate" : "Activate"}
+                              onClick={() => toggleTenantMutation.mutate({ tenantId: t.id, status: t.status })}
+                              data-testid={`button-toggle-tenant-${t.id}`}>
+                              {t.status === "active" ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                              title="Remove tenant"
+                              onClick={() => { if (confirm(`Remove ${t.name}?`)) removeTenantMutation.mutate(t.id); }}
+                              data-testid={`button-remove-tenant-${t.id}`}>
+                              <Trash2 size={12} />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))

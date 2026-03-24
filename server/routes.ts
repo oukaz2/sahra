@@ -51,6 +51,34 @@ export function registerRoutes(httpServer: Server, app: Express) {
     res.status(201).json(tenant);
   });
 
+  // Archive / restore property
+  app.patch("/api/properties/:id/status", (req, res) => {
+    const { status } = req.body;
+    const updated = storage.updatePropertyStatus(Number(req.params.id), status);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  });
+
+  // Delete property
+  app.delete("/api/properties/:id", (req, res) => {
+    storage.deleteProperty(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  // Remove tenant
+  app.delete("/api/tenants/:id", (req, res) => {
+    storage.deleteTenant(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  // Toggle tenant status
+  app.patch("/api/tenants/:id/status", (req, res) => {
+    const { status } = req.body;
+    const updated = storage.updateTenantStatus(Number(req.params.id), status);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  });
+
   // Billing Periods
   app.get("/api/properties/:propertyId/billing-periods", (req, res) => {
     const periods = storage.getBillingPeriods(Number(req.params.propertyId));

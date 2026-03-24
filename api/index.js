@@ -33038,6 +33038,18 @@ var SqliteStorage = class {
   createProperty(data) {
     return db.insert(properties).values(data).returning().get();
   }
+  updatePropertyStatus(id, status) {
+    return db.update(properties).set({ status }).where(eq(properties.id, id)).returning().get();
+  }
+  deleteProperty(id) {
+    db.delete(properties).where(eq(properties.id, id)).run();
+  }
+  deleteTenant(id) {
+    db.delete(tenants).where(eq(tenants.id, id)).run();
+  }
+  updateTenantStatus(id, status) {
+    return db.update(tenants).set({ status }).where(eq(tenants.id, id)).returning().get();
+  }
   updatePropertyTenantCount(id, count) {
     db.update(properties).set({ tenantCount: count }).where(eq(properties.id, id)).run();
   }
@@ -33267,6 +33279,26 @@ function registerRoutes(httpServer2, app2) {
     const allTenants = storage.getTenantsByProperty(Number(req.params.propertyId));
     storage.updatePropertyTenantCount(Number(req.params.propertyId), allTenants.length);
     res.status(201).json(tenant);
+  });
+  app2.patch("/api/properties/:id/status", (req, res) => {
+    const { status } = req.body;
+    const updated = storage.updatePropertyStatus(Number(req.params.id), status);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  });
+  app2.delete("/api/properties/:id", (req, res) => {
+    storage.deleteProperty(Number(req.params.id));
+    res.json({ ok: true });
+  });
+  app2.delete("/api/tenants/:id", (req, res) => {
+    storage.deleteTenant(Number(req.params.id));
+    res.json({ ok: true });
+  });
+  app2.patch("/api/tenants/:id/status", (req, res) => {
+    const { status } = req.body;
+    const updated = storage.updateTenantStatus(Number(req.params.id), status);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
   });
   app2.get("/api/properties/:propertyId/billing-periods", (req, res) => {
     const periods = storage.getBillingPeriods(Number(req.params.propertyId));

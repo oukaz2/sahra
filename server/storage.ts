@@ -87,6 +87,10 @@ export interface IStorage {
   getProperty(id: number): Property | undefined;
   createProperty(data: InsertProperty): Property;
   updatePropertyTenantCount(id: number, count: number): void;
+  updatePropertyStatus(id: number, status: string): Property | undefined;
+  deleteProperty(id: number): void;
+  deleteTenant(id: number): void;
+  updateTenantStatus(id: number, status: string): Tenant | undefined;
 
   // Tenants
   getTenantsByProperty(propertyId: number): Tenant[];
@@ -127,6 +131,18 @@ export class SqliteStorage implements IStorage {
     return db.insert(properties).values(data).returning().get();
   }
 
+  updatePropertyStatus(id: number, status: string): Property | undefined {
+    return db.update(properties).set({ status }).where(eq(properties.id, id)).returning().get();
+  }
+  deleteProperty(id: number): void {
+    db.delete(properties).where(eq(properties.id, id)).run();
+  }
+  deleteTenant(id: number): void {
+    db.delete(tenants).where(eq(tenants.id, id)).run();
+  }
+  updateTenantStatus(id: number, status: string): Tenant | undefined {
+    return db.update(tenants).set({ status }).where(eq(tenants.id, id)).returning().get();
+  }
   updatePropertyTenantCount(id: number, count: number): void {
     db.update(properties).set({ tenantCount: count }).where(eq(properties.id, id)).run();
   }
