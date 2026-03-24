@@ -1,4 +1,3 @@
-"use strict";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -23538,13 +23537,13 @@ var require_express2 = __commonJS({
   }
 });
 
-// api/index.ts
-var index_exports = {};
-__export(index_exports, {
-  default: () => index_default
+// <stdin>
+var stdin_exports = {};
+__export(stdin_exports, {
+  default: () => stdin_default
 });
-module.exports = __toCommonJS(index_exports);
-var import_express = __toESM(require_express2(), 1);
+module.exports = __toCommonJS(stdin_exports);
+var import_express = __toESM(require_express2());
 
 // node_modules/drizzle-orm/better-sqlite3/driver.js
 var import_better_sqlite3 = __toESM(require("better-sqlite3"), 1);
@@ -33390,10 +33389,10 @@ function registerRoutes(httpServer2, app2) {
   });
 }
 
-// api/index.ts
+// <stdin>
 var import_http = require("http");
-var import_path = __toESM(require("path"), 1);
-var import_fs = __toESM(require("fs"), 1);
+var import_path = __toESM(require("path"));
+var import_fs = __toESM(require("fs"));
 var app = (0, import_express.default)();
 var httpServer = (0, import_http.createServer)(app);
 app.use(import_express.default.json());
@@ -33402,19 +33401,9 @@ registerRoutes(httpServer, app);
 var distPath = import_path.default.resolve(process.cwd(), "dist/public");
 if (import_fs.default.existsSync(distPath)) {
   app.use(import_express.default.static(distPath));
+  app.use("/{*path}", (_req, res) => res.sendFile(import_path.default.resolve(distPath, "index.html")));
 }
-app.use("/{*path}", (_req, res) => {
-  const indexPath = import_path.default.resolve(process.cwd(), "dist/public/index.html");
-  if (import_fs.default.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.status(404).send("Not found");
-  }
-});
-app.use((err, _req, res, _next) => {
-  res.status(err.status || 500).json({ message: err.message || "Internal Server Error" });
-});
-var index_default = app;
+var stdin_default = app;
 /*! Bundled license information:
 
 depd/index.js:

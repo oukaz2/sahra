@@ -59,15 +59,37 @@ async function buildAll() {
     logLevel: "info",
   });
 
-  // Vercel serverless entry — pre-bundled into api/index.js so Vercel
-  // executes a self-contained file. better-sqlite3 stays external (native addon).
+  // Vercel serverless entry — bundle the Express app into api/index.js.
+  // Vercel auto-detects api/index.js as a serverless function.
+  // We use server/index.ts as the source but stdin-inject an ESM-compatible export.
   console.log("building vercel serverless entry...");
   await esbuild({
-    entryPoints: ["api/index.ts"],
+    stdin: {
+      contents: `
+        import express from 'express';
+        import { registerRoutes } from './server/routes';
+        import { createServer } from 'http';
+        import path from 'path';
+        import fs from 'fs';
+        const app = express();
+        const httpServer = createServer(app);
+        app.use(express.json());
+        app.use(express.urlencoded({ extended: false }));
+        registerRoutes(httpServer, app);
+        const distPath = path.resolve(process.cwd(), 'dist/public');
+        if (fs.existsSync(distPath)) {
+          app.use(express.static(distPath));
+          app.use('/{*path}', (_req, res) => res.sendFile(path.resolve(distPath, 'index.html')));
+        }
+        export default app;
+      `,
+      resolveDir: process.cwd(),
+      loader: 'ts',
+    },
     platform: "node",
     bundle: true,
     format: "cjs",
-    outfile: "api/index.js",  // Vercel picks up api/index.js automatically
+    outfile: "api/index.js",
     external: ["better-sqlite3"],
     minify: false,
     logLevel: "info",
