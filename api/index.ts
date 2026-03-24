@@ -1,6 +1,7 @@
 /**
  * Vercel Serverless Function entry point.
- * Exports the Express app so Vercel can route requests to it.
+ * Vercel auto-detects files in /api and serves them as serverless functions.
+ * This file must stay at api/index.ts (project root level).
  */
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "../server/routes";
@@ -17,19 +18,25 @@ app.use(express.urlencoded({ extended: false }));
 // Register all API routes
 registerRoutes(httpServer, app);
 
-// Serve static files from dist/public (for local prod usage)
-// On Vercel, static files are served by the CDN — this is a fallback
+// Serve static files — Vercel CDN handles this in production,
+// but Express serves them as fallback
 const distPath = path.resolve(process.cwd(), "dist/public");
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
-  app.use("/{*path}", (_req: Request, res: Response) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
-  });
 }
 
+// SPA fallback — all non-API routes serve index.html
+app.use("/{*path}", (_req: Request, res: Response) => {
+  const indexPath = path.resolve(process.cwd(), "dist/public/index.html");
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send("Not found");
+  }
+});
+
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  const status = err.status || err.statusCode || 500;
-  res.status(status).json({ message: err.message || "Internal Server Error" });
+  res.status(err.status || 500).json({ message: err.message || "Internal Server Error" });
 });
 
 export default app;

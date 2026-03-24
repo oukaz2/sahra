@@ -59,16 +59,15 @@ async function buildAll() {
     logLevel: "info",
   });
 
-  // Vercel serverless entry — bundled into a single CJS file so Vercel
-  // doesn't need to resolve relative imports across the project.
-  // better-sqlite3 is kept external (native addon, Vercel includes it via node_modules).
+  // Vercel serverless entry — pre-bundled into api/index.js so Vercel
+  // executes a self-contained file. better-sqlite3 stays external (native addon).
   console.log("building vercel serverless entry...");
   await esbuild({
     entryPoints: ["api/index.ts"],
     platform: "node",
     bundle: true,
     format: "cjs",
-    outfile: "dist/api.cjs",
+    outfile: "api/index.js",  // Vercel picks up api/index.js automatically
     external: ["better-sqlite3"],
     minify: false,
     logLevel: "info",
