@@ -123,9 +123,9 @@ export default function BillingPeriod() {
   };
 
   const handleSettle = () => {
-    if (!solarKwh || csvRows.length === 0) return;
+    if (csvRows.length === 0) return;
     const readings = csvRows.map(r => ({ tenantId: r.tenantId, consumptionKwh: r.consumptionKwh }));
-    settleMutation.mutate({ totalSolarKwh: Number(solarKwh), readings });
+    settleMutation.mutate({ totalSolarKwh: solarKwh ? Number(solarKwh) : 0, readings });
   };
 
   const totalDue = invoices?.reduce((s, i) => s + i.totalDueEgp, 0) ?? 0;
@@ -253,26 +253,38 @@ export default function BillingPeriod() {
             )}
 
             {/* Solar production input + settle */}
-            <div className="flex items-end gap-3">
-              <div className="flex-1">
-                <Label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
-                  <Zap size={12} /> Solar Production This Period (kWh)
-                </Label>
-                <Input
-                  type="number"
-                  placeholder="e.g. 12400"
-                  value={solarKwh}
-                  onChange={e => setSolarKwh(e.target.value)}
-                  data-testid="input-solar-kwh"
-                />
+            <div className="space-y-3">
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <Label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
+                    <Zap size={12} /> Solar Production This Period (kWh)
+                    <span className="ml-1 text-xs px-1 py-0.5 rounded"
+                      style={{ background: "hsl(220 15% 15%)", color: "hsl(220 15% 50%)" }}>
+                      optional
+                    </span>
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="0 if no solar plant"
+                    value={solarKwh}
+                    onChange={e => setSolarKwh(e.target.value)}
+                    data-testid="input-solar-kwh"
+                  />
+                </div>
+                <Button
+                  onClick={handleSettle}
+                  disabled={csvRows.length === 0 || settleMutation.isPending}
+                  data-testid="button-settle"
+                >
+                  {settleMutation.isPending ? "Settling..." : "Run Settlement"}
+                </Button>
               </div>
-              <Button
-                onClick={handleSettle}
-                disabled={csvRows.length === 0 || !solarKwh || settleMutation.isPending}
-                data-testid="button-settle"
-              >
-                {settleMutation.isPending ? "Settling..." : "Run Settlement"}
-              </Button>
+              {!solarKwh && csvRows.length > 0 && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <AlertTriangle size={11} className="text-amber-500" />
+                  No solar input — invoices will show grid cost only, no solar credit.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -308,7 +320,7 @@ export default function BillingPeriod() {
                           <td className="px-4 py-3 font-medium">{inv.tenant?.name ?? "—"}</td>
                           <td className="px-4 py-3 tabular text-muted-foreground">{fmt(inv.consumptionKwh)} kWh</td>
                           <td className="px-4 py-3 tabular">{fmtEgp(inv.gridChargeEgp)}</td>
-                          <td className="px-4 py-3 tabular text-amber-600 dark:text-amber-400">-{fmtEgp(inv.solarCreditEgp)}</td>
+                          <td className="px-4 py-3 tabular text-amber-600 dark:text-amber-400">{inv.solarCreditEgp > 0 ? `-${fmtEgp(inv.solarCreditEgp)}` : <span className="text-muted-foreground">—</span>}</td>
                           <td className="px-4 py-3 tabular font-semibold">{fmtEgp(inv.totalDueEgp)}</td>
                           <td className="px-4 py-3">
                             <Badge variant="outline" className={`text-xs badge-${inv.status}`}>{inv.status}</Badge>

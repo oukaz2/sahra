@@ -141,19 +141,21 @@ export default function PayInvoice() {
               <p className="font-bold text-xl text-white tabular">{fmtEgp(inv.totalDueEgp)} EGP</p>
             </div>
 
-            {/* Savings callout */}
-            <div className="rounded-lg px-4 py-3 flex items-center gap-3"
-              style={{ background: "hsl(38 88% 52% / 0.08)", border: "1px solid hsl(38 88% 52% / 0.2)" }}>
-              <Zap size={16} style={{ color: "hsl(38 88% 52%)" }} className="flex-shrink-0" />
-              <div>
-                <p className="text-sm font-semibold" style={{ color: "hsl(38 88% 60%)" }}>
-                  You saved {fmtEgp(savings)} EGP this month
-                </p>
-                <p className="text-xs" style={{ color: "hsl(220 15% 50%)" }}>
-                  {solarPct}% of your electricity came from on-site solar
-                </p>
+            {/* Savings callout — solar only */}
+            {inv.solarCreditEgp > 0 && (
+              <div className="rounded-lg px-4 py-3 flex items-center gap-3"
+                style={{ background: "hsl(38 88% 52% / 0.08)", border: "1px solid hsl(38 88% 52% / 0.2)" }}>
+                <Zap size={16} style={{ color: "hsl(38 88% 52%)" }} className="flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: "hsl(38 88% 60%)" }}>
+                    You saved {fmtEgp(savings)} EGP this month
+                  </p>
+                  <p className="text-xs" style={{ color: "hsl(220 15% 50%)" }}>
+                    {solarPct}% of your electricity came from on-site solar
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Payment status or CTA */}
             {isPaid ? (

@@ -284,20 +284,22 @@ export default function InvoiceDetail() {
               <p className="text-sm font-semibold tabular">{fmtEgp(inv.gridChargeEgp)} EGP</p>
             </div>
 
-            {/* Solar credit row */}
-            <div className="flex items-center justify-between py-2 rounded-lg px-3"
-              style={{ background: "hsl(38 92% 44% / 0.08)", border: "1px solid hsl(38 92% 44% / 0.2)" }}>
-              <div>
-                <p className="text-sm font-medium flex items-center gap-1.5">
-                  <Leaf size={13} className="text-amber-600 dark:text-amber-400" />
-                  Solar Credit
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {inv.solarShareKwh.toLocaleString()} kWh from solar · {inv.property?.discountPct ?? 15}% discount
-                </p>
+            {/* Solar credit row — only shown if solar credit exists */}
+            {inv.solarCreditEgp > 0 && (
+              <div className="flex items-center justify-between py-2 rounded-lg px-3"
+                style={{ background: "hsl(38 92% 44% / 0.08)", border: "1px solid hsl(38 92% 44% / 0.2)" }}>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    <Leaf size={13} className="text-amber-600 dark:text-amber-400" />
+                    Solar Credit
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {inv.solarShareKwh.toLocaleString()} kWh from solar · {inv.property?.discountPct ?? 15}% discount
+                  </p>
+                </div>
+                <p className="text-sm font-semibold tabular text-amber-600 dark:text-amber-400">-{fmtEgp(inv.solarCreditEgp)} EGP</p>
               </div>
-              <p className="text-sm font-semibold tabular text-amber-600 dark:text-amber-400">-{fmtEgp(inv.solarCreditEgp)} EGP</p>
-            </div>
+            )}
           </div>
 
           {/* Total */}
@@ -306,8 +308,8 @@ export default function InvoiceDetail() {
             <p className="text-xl font-bold tabular">{fmtEgp(inv.totalDueEgp)} EGP</p>
           </div>
 
-          {/* Savings callout */}
-          <div className="rounded-lg px-4 py-3 flex items-center gap-3"
+          {/* Savings callout — only shown when solar credit exists */}
+          {inv.solarCreditEgp > 0 && <div className="rounded-lg px-4 py-3 flex items-center gap-3"
             style={{ background: "hsl(38 92% 44% / 0.08)", border: "1px solid hsl(38 92% 44% / 0.2)" }}>
             <Zap size={18} className="text-amber-500 flex-shrink-0" />
             <div>
@@ -318,7 +320,7 @@ export default function InvoiceDetail() {
                 {solarPct}% of your consumption ({inv.solarShareKwh.toLocaleString()} kWh) came from the on-site solar plant
               </p>
             </div>
-          </div>
+          </div>}
 
           {/* Payment status */}
           {inv.status === "paid" && inv.paidAt && (
